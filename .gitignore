@@ -38,6 +38,8 @@ output.txt
 output*.txt
 latest_output.md
 
+DEMO_PROJECT_PLAN.md
+
 # IDE
 .vscode/
 .idea/
