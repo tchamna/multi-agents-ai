@@ -1,0 +1,24 @@
+# Minimal requirements.txt with auto-resolved versions
+# This solves the massive dependency conflicts in the pinned version file
+
+# Core ML/AI packages
+streamlit
+crewai
+crewai-tools
+langchain
+langchain-openai
+openai
+
+# Data processing
+pandas
+numpy
+requests
+
+# LLM local inference
+transformers
+torch
+huggingface-hub
+
+# Utility packages
+python-dotenv
+pydantic
