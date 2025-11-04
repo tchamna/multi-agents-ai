@@ -250,7 +250,8 @@ def run_research_task(topic: str, progress_placeholder, status_placeholder, mode
         with open(final_output_file, "w", encoding="utf-8") as f:
             f.write(f"# {topic.title()}\n\n")
             f.write(f"**Generated:** {timestamp}\n")
-            f.write(f"**Duration:** {format_hms(duration)}\n\n")
+            f.write(f"**Duration:** {format_hms(duration)}\n")
+            f.write(f"**Model:** {model_name}\n\n")
             f.write("---\n\n")
             # Use the writer's article if available, otherwise fall back to final result
             content_to_save = article_content if article_content else str(result)

@@ -23,32 +23,45 @@ def create_research_task(topic: str, agent: Task = None) -> Task:
                         'recent events', 'what happened', 'whats happening'])
     
     if is_news_query:
-        description = f"""Use the 'Search the internet with Serper' tool to find REAL CURRENT NEWS about: '{topic}'.
+        description = f"""Use the 'Search the internet with Serper' tool to find REAL CURRENT NEWS STORIES about: '{topic}'.
         
         MANDATORY FIRST STEP: Call your tool 'Search the internet with Serper' with search_query='{topic}'
         
-        After you receive the search results, format them EXACTLY like this:
+        After you receive the search results, FILTER OUT generic homepage descriptions and ONLY include actual news stories.
+        
+        SKIP these types of results:
+        - General site descriptions (e.g., "BBC News provides coverage...")
+        - Homepage links without specific stories
+        - Generic "latest news" portals
+        - Social media pages
+        
+        ONLY INCLUDE results that have:
+        - Specific events or stories with details
+        - Dates or timeframes mentioned
+        - Actual news content in the snippet (not just site descriptions)
+        
+        Format ONLY the actual news stories EXACTLY like this:
         
         SEARCH RESULTS:
         ---
-        1. Title: [copy exact title from search result]
-           Snippet: [copy exact snippet from search result]
-           URL: [copy exact URL from search result]
+        1. Title: [copy exact title - must be a specific story]
+           Snippet: [copy exact snippet - must describe a specific event/story]
+           URL: [copy exact URL]
         
-        2. Title: [copy exact title from search result]
-           Snippet: [copy exact snippet from search result]
-           URL: [copy exact URL from search result]
+        2. Title: [copy exact title - must be a specific story]
+           Snippet: [copy exact snippet - must describe a specific event/story]
+           URL: [copy exact URL]
         
-        (continue for all search results)
+        (continue for all ACTUAL NEWS STORIES only)
         ---
         
         RULES:
         - You HAVE a tool called 'Search the internet with Serper' - USE IT FIRST
-        - Copy EXACTLY what the search tool returns - do not rewrite or embellish
-        - Include ALL search results from the tool (at least 5-8 items)
-        - Do NOT say you cannot access URLs - you have a search tool that CAN
-        - Do NOT add commentary, analysis, or made-up information
-        - Your job: 1) Use tool, 2) Copy results exactly"""
+        - FILTER: Only include results with specific news stories (not site homepages)
+        - Copy EXACTLY what the search tool returns for actual news items
+        - Aim for 5-10 actual news stories (skip generic descriptions)
+        - Do NOT include results that are just site descriptions
+        - Your job: 1) Use tool, 2) Filter for actual news, 3) Copy filtered results exactly"""
     else:
         description = f"""Conduct comprehensive research on the topic: '{topic}'.
         
@@ -83,9 +96,11 @@ def create_writing_task(topic: str, agent: Task = None) -> Task:
     if is_news_query:
         description = f"""Format the researcher's search results into a clean news summary about '{topic}'.
         
-        The researcher has provided EXACT search results. Your ONLY job is to format them nicely.
+        The researcher has provided FILTERED search results (actual news stories only). Your ONLY job is to format them nicely.
         
-        Create this structure for EACH news item:
+        IMPORTANT: The researcher already filtered out generic site descriptions. You should receive ONLY actual news stories.
+        
+        Create this structure for EACH news story:
         
         ## [Number]. [Exact Title from search result]
         
