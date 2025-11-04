@@ -14,11 +14,6 @@ pandas
 numpy
 requests
 
-# LLM local inference
-transformers
-torch
-huggingface-hub
-
 # Utility packages
 python-dotenv
 pydantic
