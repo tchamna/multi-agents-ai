@@ -40,28 +40,35 @@ def create_research_task(topic: str, agent: Task = None) -> Task:
         - Dates or timeframes mentioned
         - Actual news content in the snippet (not just site descriptions)
         
-        Format ONLY the actual news stories EXACTLY like this:
+        After getting search results, extract ONLY results with specific news stories.
+        
+        For each result in the search tool output, look at the 'organic' list:
+        - Each item has: 'title', 'link', 'snippet'
+        - ONLY use items where the snippet describes a SPECIFIC event/story (not general site descriptions)
+        
+        Output format - COPY EXACTLY from the search tool's 'organic' results:
         
         SEARCH RESULTS:
         ---
-        1. Title: [copy exact title - must be a specific story]
-           Snippet: [copy exact snippet - must describe a specific event/story]
-           URL: [copy exact URL]
+        1. Title: [exact 'title' from organic result]
+           Snippet: [exact 'snippet' from organic result]
+           URL: [exact 'link' from organic result - COPY VERBATIM, DO NOT MODIFY]
         
-        2. Title: [copy exact title - must be a specific story]
-           Snippet: [copy exact snippet - must describe a specific event/story]
-           URL: [copy exact URL]
+        2. Title: [exact 'title' from organic result]
+           Snippet: [exact 'snippet' from organic result]
+           URL: [exact 'link' from organic result - COPY VERBATIM, DO NOT MODIFY]
         
-        (continue for all ACTUAL NEWS STORIES only)
+        (continue for each actual news story)
         ---
         
-        RULES:
-        - You HAVE a tool called 'Search the internet with Serper' - USE IT FIRST
-        - FILTER: Only include results with specific news stories (not site homepages)
-        - Copy EXACTLY what the search tool returns for actual news items
-        - Aim for 5-10 actual news stories (skip generic descriptions)
-        - Do NOT include results that are just site descriptions
-        - Your job: 1) Use tool, 2) Filter for actual news, 3) Copy filtered results exactly"""
+        ABSOLUTE RULES - VIOLATIONS WILL CAUSE ERRORS:
+        - STEP 1: Call 'Search the internet with Serper' tool
+        - STEP 2: Look at the tool output's 'organic' array
+        - STEP 3: For each item, copy the 'link' field EXACTLY as it appears
+        - DO NOT create URLs, modify URLs, or guess what the URL should be
+        - DO NOT add paths like /health/ or /business/ to homepage URLs
+        - If 'link' is https://www.nbcnews.com/, write EXACTLY https://www.nbcnews.com/
+        - Copy character-by-character from the 'link' field - treat URLs as untouchable strings"""
     else:
         description = f"""Conduct comprehensive research on the topic: '{topic}'.
         
@@ -111,7 +118,7 @@ def create_writing_task(topic: str, agent: Task = None) -> Task:
         - [Extract fourth key fact from snippet]
         - [Extract fifth key fact from snippet]
         
-        **Source:** [Exact URL]
+        **Source:** [Exact URL from researcher - DO NOT modify or create new URLs]
         
         INSTRUCTIONS:
         1. Break each snippet into 5 bullet points
@@ -119,6 +126,7 @@ def create_writing_task(topic: str, agent: Task = None) -> Task:
         3. Keep bullets concise (one sentence, 10-20 words each)
         4. If snippet is short, break down the main information into smaller points
         5. Do NOT add information not in the snippet
+        6. CRITICAL: Use ONLY the exact URLs provided by the researcher - DO NOT fabricate or modify URLs
         
         EXAMPLE FORMAT:
         
@@ -133,7 +141,15 @@ def create_writing_task(topic: str, agent: Task = None) -> Task:
         
         **Source:** https://newjersey.news12.com/
         
-        CRITICAL RULES:
+        ABSOLUTE URL RULES - BREAKING THESE CAUSES "PAGE NOT FOUND" ERRORS:
+        - COPY the exact URL string provided by the researcher
+        - DO NOT add /health/, /business/, /us-news/, etc. to URLs
+        - DO NOT add article paths like /story?id=123456
+        - DO NOT create rcna numbers or other article IDs
+        - If researcher provides https://www.nbcnews.com/, use https://www.nbcnews.com/
+        - URLs are READ-ONLY strings - copy character by character
+        
+        OTHER RULES:
         - You MUST create exactly 5 bullet points per news item
         - Copy exact titles from researcher's results
         - Extract only what's in the snippets - no fabrication
