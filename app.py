@@ -105,6 +105,21 @@ def get_recent_runs(limit=10):
     return runs
 
 
+def format_hms(seconds: float) -> str:
+    """Format seconds as HH:MM:SS (hours may be > 99 if long runs).
+
+    Rounds to nearest second for display.
+    """
+    try:
+        total = int(round(float(seconds)))
+    except Exception:
+        total = 0
+    hrs = total // 3600
+    mins = (total % 3600) // 60
+    secs = total % 60
+    return f"{hrs:02d}:{mins:02d}:{secs:02d}"
+
+
 def display_task_output(task_file: Path):
     """Display a task output file."""
     if not task_file.exists():
@@ -131,49 +146,73 @@ def display_task_output(task_file: Path):
         st.error(f"Error reading {task_file.name}: {e}")
 
 
-def run_research_task(topic: str, progress_placeholder, status_placeholder):
+def run_research_task(topic: str, progress_placeholder, status_placeholder, model_name="gpt-3.5-turbo"):
     """Execute the multi-agent research task."""
     try:
         # Import here to avoid issues if dependencies aren't installed
         from crewai import Crew, Process
         from tasks import create_research_task, create_writing_task, create_review_task, create_analysis_task
-        from agents import researcher, writer, reviewer, analyst
+        # Create fresh agent instances per run with selected model
+        from agents import make_agents_with_model
+        researcher, writer, reviewer, analyst = make_agents_with_model(model_name)
         
+        # Debug: Show which model is being used
+        st.info(f"🤖 Using LLM: {model_name}")
+        st.info(f"🔧 Researcher has {len(researcher.tools)} tool(s): {[t.name for t in researcher.tools] if researcher.tools else 'None'}")
+
         # Create timestamped output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_dir = Path("runs") / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
-        
+
         status_placeholder.info(f"📁 Output directory: `{run_dir}`")
-        
-        # Create tasks
+
+        # Detect if this is a news query
+        topic_lower = topic.lower()
+        is_news_query = any(keyword in topic_lower for keyword in 
+                           ['news', 'latest', 'today', 'current events', 'breaking', 'headlines', 
+                            'recent events', 'what happened', 'whats happening'])
+
+        # Create tasks bound to freshly-created agents
         progress_placeholder.progress(0.1, "Creating tasks...")
-        research_task = create_research_task(topic)
-        analysis_task = create_analysis_task(topic)
-        writing_task = create_writing_task(topic)
-        review_task = create_review_task()
+        research_task = create_research_task(topic, agent=researcher)
+        writing_task = create_writing_task(topic, agent=writer)
         
+        # For news queries, skip analyst and reviewer (2-agent workflow)
+        # For standard research, use all 4 agents
+        if is_news_query:
+            status_placeholder.info("📰 News query detected - using streamlined 2-agent workflow")
+            crew = Crew(
+                agents=[researcher, writer],
+                tasks=[research_task, writing_task],
+                process=Process.sequential,
+                verbose=True
+            )
+        else:
+            analysis_task = create_analysis_task(topic, agent=analyst)
+            review_task = create_review_task(agent=reviewer)
+            crew = Crew(
+                agents=[researcher, analyst, writer, reviewer],
+                tasks=[research_task, analysis_task, writing_task, review_task],
+                process=Process.sequential,
+                verbose=True
+            )
+
         # Create the crew
         progress_placeholder.progress(0.2, "Initializing crew...")
-        crew = Crew(
-            agents=[researcher, analyst, writer, reviewer],
-            tasks=[research_task, analysis_task, writing_task, review_task],
-            process=Process.sequential,
-            verbose=True
-        )
-        
+
         # Execute the crew
         progress_placeholder.progress(0.3, "🔬 Research agent working...")
         start_time = datetime.now()
-        
+
         # Run in separate thread to allow UI updates (simplified for demo)
         result = crew.kickoff()
-        
+
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        
+
         progress_placeholder.progress(1.0, "✅ Complete!")
-        
+
         # Save outputs (similar to main.py logic)
         task_outputs = []
         tasks_info = [
@@ -182,8 +221,9 @@ def run_research_task(topic: str, progress_placeholder, status_placeholder):
             {"name": "writing", "description": "Article draft", "agent": "writer"},
             {"name": "review", "description": "Quality review", "agent": "reviewer"}
         ]
-        
-        # Save individual task outputs
+
+        # Save individual task outputs and capture the article
+        article_content = None
         if hasattr(crew, 'tasks'):
             for i, (task_info, task) in enumerate(zip(tasks_info, crew.tasks), 1):
                 if hasattr(task, 'output') and task.output:
@@ -194,23 +234,28 @@ def run_research_task(topic: str, progress_placeholder, status_placeholder):
                         f.write(f"# Agent: {task_info['agent']}\n")
                         f.write("=" * 60 + "\n\n")
                         f.write(output_text)
-                    
+
+                    # Capture the writer's article (task 3) for final output
+                    if task_info['name'] == 'writing':
+                        article_content = output_text
+
                     task_outputs.append({
                         "task_number": i,
                         "task_name": task_info["name"],
                         "output_file": str(task_file)
                     })
-        
-        # Save final output
+
+        # Save final output - use the article from the writer, not the reviewer's feedback
         final_output_file = run_dir / "final_output.md"
         with open(final_output_file, "w", encoding="utf-8") as f:
-            f.write(f"# Multi-Agent AI System Output\n\n")
-            f.write(f"**Topic:** {topic}\n\n")
-            f.write(f"**Generated:** {timestamp}\n\n")
-            f.write(f"**Duration:** {duration:.2f} seconds\n\n")
+            f.write(f"# {topic.title()}\n\n")
+            f.write(f"**Generated:** {timestamp}\n")
+            f.write(f"**Duration:** {format_hms(duration)}\n\n")
             f.write("---\n\n")
-            f.write(str(result))
-        
+            # Use the writer's article if available, otherwise fall back to final result
+            content_to_save = article_content if article_content else str(result)
+            f.write(content_to_save)
+
         # Save summary
         summary = {
             "topic": topic,
@@ -222,13 +267,13 @@ def run_research_task(topic: str, progress_placeholder, status_placeholder):
             "final_output_file": str(final_output_file),
             "tasks": task_outputs
         }
-        
+
         summary_file = run_dir / "summary.json"
         with open(summary_file, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
-        
+
         return True, run_dir, duration, str(result)
-        
+
     except Exception as e:
         progress_placeholder.empty()
         return False, None, 0, str(e)
@@ -269,7 +314,7 @@ def main():
             for run in runs:
                 with st.expander(f"🕐 {run['timestamp']}", expanded=False):
                     st.write(f"**Topic:** {run['topic']}")
-                    st.write(f"**Duration:** {run['duration']:.1f}s")
+                    st.write(f"**Duration:** {format_hms(run['duration'])}")
                     if st.button("View", key=f"view_{run['timestamp']}"):
                         st.session_state['selected_run'] = run['folder']
         else:
@@ -284,6 +329,27 @@ def main():
         if not keys_ok:
             st.warning("ℹ️ No OpenAI API key detected. Using free Microsoft Phi-2 model (slower but no cost).")
             st.info("💡 **Tip:** Add `OPENAI_API_KEY` to `.env` for faster GPT-4 performance.")
+        
+        # Model selection
+        st.markdown("### 🤖 Select AI Model")
+        model_choice = st.radio(
+            "Choose your model:",
+            options=["GPT-3.5-turbo (Cheapest)", "GPT-4o-mini (Better Tool Calling)"],
+            index=0,
+            help="GPT-3.5-turbo: Most economical | GPT-4o-mini: Better at using search tools reliably",
+            horizontal=True
+        )
+        
+        # Extract model name
+        selected_model = "gpt-3.5-turbo" if "turbo" in model_choice else "gpt-4o-mini"
+        
+        # Show model info
+        if selected_model == "gpt-3.5-turbo":
+            st.info("💰 **GPT-3.5-turbo**: Most economical option. May have variable tool calling reliability.")
+        else:
+            st.info("⚡ **GPT-4o-mini**: Better tool calling reliability (~20-40s), excellent for news queries and research tasks requiring search.")
+        
+        st.divider()
         
         # Topic input
         topic = st.text_input(
@@ -311,11 +377,11 @@ def main():
             
             with st.spinner("Initializing multi-agent system..."):
                 success, run_dir, duration, result = run_research_task(
-                    topic, progress_placeholder, status_placeholder
+                    topic, progress_placeholder, status_placeholder, selected_model
                 )
             
             if success:
-                st.success(f"✅ Research completed in {duration:.1f} seconds!")
+                st.success(f"✅ Research completed in {format_hms(duration)}!")
                 
                 # Display results
                 st.divider()
@@ -375,7 +441,7 @@ def main():
             selected_run = st.selectbox(
                 "Select a run to view:",
                 options=runs,
-                format_func=lambda x: f"{x['timestamp']} - {x['topic'][:50]}... ({x['duration']:.1f}s)"
+                format_func=lambda x: f"{x['timestamp']} - {x['topic'][:50]}... ({format_hms(x['duration'])})"
             )
             
             if selected_run:
@@ -391,7 +457,7 @@ def main():
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Topic", summary.get('topic', 'Unknown')[:30] + "...")
-                    col2.metric("Duration", f"{summary.get('duration_seconds', 0):.1f}s")
+                    col2.metric("Duration", format_hms(summary.get('duration_seconds', 0)))
                     col3.metric("Tasks", len(summary.get('tasks', [])))
                 
                 # Display final output
@@ -403,7 +469,6 @@ def main():
                 
                 # Display task outputs
                 st.divider()
-                st.subheader("🔍 Individual Agent Outputs")
                 task_files = sorted(run_dir.glob("task-*.txt"))
                 for task_file in task_files:
                     display_task_output(task_file)
